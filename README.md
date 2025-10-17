@@ -2,7 +2,7 @@
 
 This is my personal GitHub Pages site where I share technical posts about AI/ML infrastructure, data engineering, and production systems.
 
-**Live Site**: [https://emiliano.frigo.github.io](https://emiliano.frigo.github.io)
+**Live Site**: [https://efrigo88.github.io](https://efrigo88.github.io)
 
 ## Posts
 
