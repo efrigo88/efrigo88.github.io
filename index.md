@@ -45,4 +45,4 @@ A deep dive into the challenges we faced running Ollama for self-hosted LLM infe
 
 - [Mutt Data](https://www.muttdata.ai/)
 - [GitHub](https://github.com/efrigo88)
-- [LinkedIn](https://www.linkedin.com/in/emiliano-frigo/) *(update with your LinkedIn URL)*
+- [LinkedIn](https://www.linkedin.com/in/emiliano-frigo-17222733)
