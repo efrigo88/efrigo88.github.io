@@ -1,0 +1,37 @@
+# Site Configuration
+title: Emiliano Frigo
+description: Data Engineer sharing insights on AI/ML infrastructure, data engineering, and production systems
+author: Emiliano Frigo
+email: emif.iron@gmail.com
+
+# URL settings
+url: "https://emiliano.frigo.github.io"
+baseurl: ""
+
+# Theme (GitHub Pages supported themes)
+theme: jekyll-theme-cayman
+# Other options: jekyll-theme-minimal, jekyll-theme-slate, jekyll-theme-architect
+
+# Markdown settings
+markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+  syntax_highlighter_opts:
+    css_class: 'highlight'
+
+# Plugins
+plugins:
+  - jekyll-seo-tag
+  - jekyll-feed
+
+# Social links
+github_username: efrigo88
+
+# Build settings
+exclude:
+  - README.md
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor
