@@ -1,0 +1,158 @@
+---
+---
+
+@import "{{ site.theme }}";
+
+/* Dark Mode Override */
+body {
+  background-color: #0d1117;
+  color: #c9d1d9;
+}
+
+.page-header {
+  background-color: #161b22;
+  background-image: linear-gradient(120deg, #1f6feb, #0d1117);
+}
+
+.main-content {
+  max-width: 64rem;
+  padding: 2rem 4rem;
+  margin: 0 auto;
+  font-size: 1.1rem;
+  background-color: #0d1117;
+  color: #c9d1d9;
+}
+
+.main-content h1,
+.main-content h2,
+.main-content h3,
+.main-content h4,
+.main-content h5,
+.main-content h6 {
+  color: #58a6ff;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+}
+
+.main-content h1 {
+  border-bottom: 2px solid #21262d;
+  padding-bottom: 0.3rem;
+}
+
+.main-content a {
+  color: #58a6ff;
+}
+
+.main-content a:hover {
+  color: #79c0ff;
+  text-decoration: underline;
+}
+
+.main-content code {
+  background-color: #161b22;
+  color: #79c0ff;
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid #30363d;
+}
+
+.main-content pre {
+  background-color: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 16px;
+  overflow: auto;
+}
+
+.main-content pre code {
+  background-color: transparent;
+  border: none;
+  color: #c9d1d9;
+  padding: 0;
+}
+
+.main-content blockquote {
+  background-color: #161b22;
+  border-left: 4px solid #58a6ff;
+  padding: 10px 20px;
+  color: #8b949e;
+}
+
+.main-content table {
+  background-color: #161b22;
+  border: 1px solid #30363d;
+}
+
+.main-content table th {
+  background-color: #21262d;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+}
+
+.main-content table td {
+  border: 1px solid #30363d;
+}
+
+.main-content hr {
+  background-color: #21262d;
+  border: none;
+  height: 2px;
+}
+
+/* Syntax highlighting for code blocks */
+.highlight {
+  background-color: #161b22 !important;
+}
+
+/* Back to Home Button */
+.back-home {
+  display: inline-block;
+  margin-bottom: 2rem;
+  padding: 10px 20px;
+  background-color: #21262d;
+  color: #58a6ff;
+  text-decoration: none;
+  border-radius: 6px;
+  border: 1px solid #30363d;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.back-home:hover {
+  background-color: #30363d;
+  border-color: #58a6ff;
+  color: #79c0ff;
+  text-decoration: none;
+}
+
+.back-home::before {
+  content: "← ";
+}
+
+/* Better link styling */
+.main-content ul li,
+.main-content ol li {
+  margin-bottom: 0.5rem;
+}
+
+/* Improve readability */
+.main-content p {
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+
+/* Strong/Bold text */
+.main-content strong {
+  color: #f0f6fc;
+  font-weight: 600;
+}
+
+/* Horizontal rules */
+.main-content hr {
+  margin: 2rem 0;
+}
+
+/* Author byline styling */
+.main-content h1 + p strong {
+  color: #f0f6fc;
+}
