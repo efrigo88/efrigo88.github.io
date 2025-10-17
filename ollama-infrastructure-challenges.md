@@ -1,3 +1,5 @@
+<a href="index.html" class="back-home">Back to Home</a>
+
 # The Ollama Odyssey: Lessons from Running High-Throughput LLM Serving in Production
 
 **Author**: Emiliano Frigo<br>
