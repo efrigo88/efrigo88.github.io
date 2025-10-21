@@ -26,7 +26,7 @@
   - [5. The Qwen Model Problem](#5-the-qwen-model-problem)
   - [6. Model Unloading Reliability](#6-model-unloading-reliability)
 - [Our Band-Aid Solution: Subprocess Timeouts](#our-band-aid-solution-subprocess-timeouts)
-- [Researching Alternatives: The vLLM Trade-off](#researching-alternatives-the-vllm-trade-off)
+- [Researching Alternatives: Self-Hosted Inference Options](#researching-alternatives-self-hosted-inference-options)
 - [The Final Decision: Moving to APIs](#the-final-decision-moving-to-apis)
 - [Lessons Learned](#lessons-learned)
 
@@ -106,19 +106,12 @@ When you request a model in Ollama, here's what happens:
 - `keep_alive=5m`: Keep loaded for 5 minutes of inactivity
 - `keep_alive=-1`: Keep loaded indefinitely (our configuration)
 
-**Unloading a model (in theory):**
+**Unloading a model:**
 - When `keep_alive` expires or you explicitly request unloading
-- Ollama should deallocate GPU memory
+- Ollama should deallocate GPU memory and free VRAM
 - The model can be loaded again when needed
 
-**What actually happens (in practice):**
-
-This is where theory met reality in our production environment. As detailed in problem #6, Ollama's model unloading was **unreliable**:
-- Sometimes models unloaded immediately and freed VRAM
-- Other times, VRAM remained allocated for minutes after unload requests
-- Occasionally, memory was never freed until we restarted the entire Ollama service
-
-With `OLLAMA_MAX_LOADED_MODELS=2` and only 24GB VRAM per GPU, failed unloading meant we couldn't load the next model, causing pipeline failures. We had no visibility into *why* unloading failed—it would just silently not free memory.
+In theory, this gives you dynamic model management with automatic memory cleanup. In practice, as we'll see in the problems section, the reliability of this mechanism can vary.
 
 ### GPU Memory Management
 
@@ -128,21 +121,9 @@ Ollama attempts to automatically manage GPU memory, but this automation comes wi
 - When loading a model, Ollama calculates required VRAM based on model size and context window
 - Larger context windows (`OLLAMA_NUM_CTX`) exponentially increase memory requirements
 - With multiple models loaded (`OLLAMA_MAX_LOADED_MODELS=2`), memory becomes a juggling act
+- Ollama doesn't expose real-time VRAM usage through its API, making it difficult to predict when you'll hit limits
 
-**The hidden costs of context windows:**
-```
-Model: Qwen3-14B (fits in ~14GB base VRAM)
-
-OLLAMA_NUM_CTX=2048   → ~14GB VRAM   (Ollama default)
-OLLAMA_NUM_CTX=35567  → ~18GB VRAM   (our initial setting)
-OLLAMA_NUM_CTX=64000  → ~22GB VRAM   (approaching GPU limit)
-OLLAMA_NUM_CTX=128000 → ~45GB VRAM   (requires multi-GPU split)
-```
-
-**Why this caused problems:**
-- Memory requirements weren't deterministic—the same configuration would sometimes OOM, sometimes work
-- Ollama doesn't expose real-time VRAM usage through its API
-- Memory fragmentation accumulated over time, requiring periodic restarts
+The relationship between context window size and VRAM usage is non-linear, and memory fragmentation can accumulate over time, sometimes requiring service restarts.
 
 ### Multi-GPU Layer Distribution (Pipeline Parallelism)
 
@@ -165,15 +146,11 @@ GPU 1: Layers 16-31 (second half of the model)
 
 **Why this matters:**
 
-The transfer speed between GPUs determines overall performance:
-- **NVLink (A100, H100 instances)**: ~600 GB/s bandwidth → efficient multi-GPU
+The transfer speed between GPUs is critical for performance:
+- **NVLink (A100, H100 instances)**: ~600 GB/s bandwidth → efficient multi-GPU inference
 - **PCIe 4.0 (g5.12xlarge instances)**: ~32 GB/s bandwidth → **18x slower transfers!**
 
-This explained our shocking performance degradation:
-- Single-GPU models (fits in 24GB): 30-45 seconds per generation
-- Multi-GPU split models (>24GB): 120-180 seconds per generation (**3-4x slower**)
-
-The g5.12xlarge instance has 4 powerful GPUs, but they can't efficiently work together on a single model due to PCIe bottlenecks. This forced us to use smaller, lower-quality models that fit on a single GPU.
+This bandwidth difference creates a significant bottleneck when models are split across GPUs with PCIe interconnections, as we'll see in the problems section.
 
 ### Visual Architecture Overview
 
@@ -375,17 +352,39 @@ LLM_RETRY_DELAY=2     # 2-second delay between retries
 
 This approach was a **band-aid, not a cure**. We were fighting the infrastructure instead of building features.
 
-## Researching Alternatives: The vLLM Trade-off
+## Researching Alternatives: Self-Hosted Inference Options
 
-After months of operational pain, we researched alternatives. **vLLM** emerged as the production-grade option with significant advantages:
+After months of operational pain, we researched alternatives to Ollama. Several production-grade self-hosted solutions emerged:
 
-**vLLM Benefits:**
+### vLLM (UC Berkeley)
+
+**Strengths:**
 - **Continuous batching**: Process multiple requests concurrently
 - **PagedAttention**: More efficient memory management (reduces fragmentation)
 - **Production-grade**: Built by UC Berkeley's SkyLab team with extensive logging and Prometheus metrics
 - **Better stability**: Community reports significantly better Qwen3 model stability
 
 **The Critical Trade-off**: vLLM's limitation is that each instance serves **a single model**. To serve multiple models, you need multiple vLLM instances.
+
+### Other Self-Hosted Alternatives We Considered
+
+**Text Generation Inference (TGI) by Hugging Face:**
+- **Strengths**: Supports dynamic batching, streaming, and quantization; excellent integration with Hugging Face ecosystem
+- **Use case**: Best for teams already using Hugging Face models and infrastructure
+
+**TensorRT-LLM (NVIDIA):**
+- **Strengths**: Highly optimized for NVIDIA GPUs with TensorRT; excellent performance on A100/H100 instances
+- **Use case**: Maximum performance for production workloads on NVIDIA hardware with expert GPU teams
+
+**LocalAI:**
+- **Strengths**: Multi-model support in a single instance; compatible with OpenAI API; supports text, audio, and image generation
+- **Use case**: Teams needing multi-modal capabilities and easy migration from OpenAI API
+
+**ExLlamaV2:**
+- **Strengths**: Extremely fast inference for Llama-based models; excellent tensor parallelism support
+- **Use case**: High-throughput serving of Llama model family with multi-GPU setups
+
+While all these alternatives offered production-grade capabilities, **vLLM's single-model-per-instance limitation** was the common challenge for our multi-model pipeline architecture.
 
 **Why this was a dealbreaker for us**:
 
@@ -501,27 +500,30 @@ Unless this is your core competency, the operational burden outweighs the cost s
 
 If you need to wrap LLM calls in subprocess-based timeout mechanisms, **your infrastructure has a reliability problem**. This pattern indicates you're fighting the tool instead of using it effectively.
 
-### 5. The Future: vLLM Done Right
+### 5. The Future: Revisiting Self-Hosted Inference
 
-We haven't abandoned self-hosting entirely. We plan to revisit self-hosted inference using **vLLM** once we:
+We haven't abandoned self-hosting entirely. We plan to revisit self-hosted inference using production-grade solutions like **vLLM**, **TensorRT-LLM**, or **TGI** once we:
 
 1. **Simplify our architecture**: Reduce models per pipeline run (5-8 models → 2-3)
 2. **Build GPU expertise**: Invest in training on tensor parallelism and memory optimization
 3. **Choose the right hardware**: Target NVLink-enabled instances (p4d, p5) instead of PCIe-limited g5
-4. **Deploy strategically**: Use vLLM for highest-volume model, keep APIs for specialized tasks
+4. **Deploy strategically**: Use self-hosted inference for highest-volume model, keep APIs for specialized tasks
 
-**What we'll do differently with vLLM:**
-- Accept the single-model-per-instance limitation and plan architecture accordingly
+**What we'll do differently:**
+- Accept the single-model-per-instance limitation (for vLLM/TGI) and plan architecture accordingly
 - Start with one model, validate stability over weeks, then gradually expand
 - Implement comprehensive monitoring from day one (Prometheus metrics, structured logs, alerting)
-- Run parallel shadow deployments (vLLM + API) to validate before cutover
+- Run parallel shadow deployments (self-hosted + API) to validate before cutover
 - Set strict success criteria: if we can't achieve 99.5% reliability within 3 months, we stick with APIs
 
-**Why we're optimistic about vLLM:**
-- Built for production (not a development tool like Ollama)
-- PagedAttention should solve memory fragmentation and context window issues
-- Community reports significantly better stability, especially with Qwen3 models
+**Why we're optimistic about these alternatives:**
+- Built for production (not development tools like Ollama)
+- Better memory management should solve fragmentation and context window issues
+- Community reports significantly better stability, especially with challenging models like Qwen3
 - Built-in observability will help us debug issues before they become production incidents
+- Mature ecosystems with extensive documentation and community support
+
+We're particularly interested in exploring **LocalAI** for its multi-model capabilities and **TensorRT-LLM** for maximum performance on high-end NVIDIA hardware. The key is choosing the right tool for our evolved architecture rather than forcing our original design onto incompatible infrastructure.
 
 ### 6. Recommendations for Others
 
@@ -532,20 +534,32 @@ If you're building a system that requires **high reliability and minimal operati
   - For uncensored models: OpenRouter with SOC2-compliant options
   - For general use: Anthropic, OpenAI, Google Cloud
 - **Avoid Ollama for production workloads** that run autonomously
-- **Consider vLLM only after** you have clear ROI calculations, GPU expertise, and willingness to invest in observability
+- **Consider self-hosted inference (vLLM, TGI, TensorRT-LLM) only after** you have clear ROI calculations, GPU expertise, and willingness to invest in observability
 - **Don't use multi-GPU splitting on PCIe-connected GPUs** (AWS g5 instances)
 
-For teams with deep infrastructure expertise and high-volume, single-model workloads, vLLM offers compelling benefits. But don't rush into it. Start simple, validate demand, then optimize infrastructure when it's actually the bottleneck—not when you think it might be.
+For teams with deep infrastructure expertise and high-volume, single-model workloads, production-grade self-hosted solutions (vLLM, TensorRT-LLM, TGI) offer compelling benefits. But don't rush into it. Start simple, validate demand, then optimize infrastructure when it's actually the bottleneck—not when you think it might be.
 
 ---
 
 **About the Project**: This system was developed by **Mutt Data** for a client building AI-powered tools to assist immigration attorneys with case preparation. The RAG pipeline generates legal declarations for VAWA and Visa T cases, combining PDF extraction, semantic search, multi-model LLM generation, and quality evaluation.
 
+This was a collaborative team effort involving 2 data architects and 3 ML engineers. As part of this team, I was specifically tasked with designing and managing the LLM inference infrastructure. The challenges documented in this article represent real production issues we encountered, debugged, and ultimately resolved. I'm sharing these lessons with the community in hopes that others can avoid similar pitfalls when building production LLM systems.
+
 **About Mutt Data**: We are AI strategy partners specializing in building production-ready AI/ML systems for complex, real-world use cases. As an **AWS Advanced Consulting Partner** with Machine Learning competency, we help businesses in AdTech, MarTech, FinTech, and Telco build automated systems that maximize revenue. This project taught us invaluable lessons about the operational realities of self-hosted LLM infrastructure at scale. Learn more at [muttdata.ai](https://www.muttdata.ai/).
 
 **Read More**:
+
+**About Mutt Data:**
 - [Mutt Data - AI Strategy Partners](https://www.muttdata.ai/)
 - [Moving from Ollama to vLLM: Finding Stability for High-Throughput LLM Serving](https://pub.towardsai.net/moving-from-ollama-to-vllm-finding-stability-for-high-throughput-llm-serving-74d3dc9702c8)
-- [Analysis of Ollama Architecture and Conversation Processing Flow](https://medium.com/@rifewang/analysis-of-ollama-architecture-and-conversation-processing-flow-for-ai-llm-tool-ead4b9f40975)
-- [vLLM Documentation](https://docs.vllm.ai/)
+
+**Ollama Resources:**
 - [Ollama GitHub](https://github.com/ollama/ollama)
+- [Analysis of Ollama Architecture and Conversation Processing Flow](https://medium.com/@rifewang/analysis-of-ollama-architecture-and-conversation-processing-flow-for-ai-llm-tool-ead4b9f40975)
+
+**Self-Hosted Inference Alternatives:**
+- [vLLM Documentation](https://docs.vllm.ai/)
+- [Text Generation Inference (TGI) by Hugging Face](https://github.com/huggingface/text-generation-inference)
+- [TensorRT-LLM by NVIDIA](https://github.com/NVIDIA/TensorRT-LLM)
+- [LocalAI Documentation](https://localai.io/)
+- [ExLlamaV2 GitHub](https://github.com/turboderp/exllamav2)
