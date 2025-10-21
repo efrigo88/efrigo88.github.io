@@ -12,6 +12,12 @@
 
 - [Introduction](#introduction)
 - [Our Ollama Setup](#our-ollama-setup)
+- [Understanding Ollama's Architecture](#understanding-ollamas-architecture)
+  - [Server-Client Architecture](#server-client-architecture)
+  - [Model Loading and Unloading: How It Should Work](#model-loading-and-unloading-how-it-should-work)
+  - [GPU Memory Management](#gpu-memory-management)
+  - [Multi-GPU Layer Distribution (Pipeline Parallelism)](#multi-gpu-layer-distribution-pipeline-parallelism)
+  - [Visual Architecture Overview](#visual-architecture-overview)
 - [The Problems We Encountered](#the-problems-we-encountered)
   - [1. Constant Hangs and Timeouts](#1-constant-hangs-and-timeouts)
   - [2. Opaque Logging and Debugging](#2-opaque-logging-and-debugging)
@@ -62,6 +68,162 @@ Environment="OLLAMA_FLASH_ATTENTION=1"      # Enable attention optimization
 ```
 
 We also implemented GPU monitoring (CloudWatch metrics every 30 seconds) to track memory utilization and diagnose when models weren't unloading properly.
+
+## Understanding Ollama's Architecture
+
+Before diving into the problems we encountered, it's helpful to understand how Ollama works under the hood. This context will illuminate why certain issues emerged and why they were so difficult to resolve.
+
+### Server-Client Architecture
+
+Ollama follows a two-layer architecture:
+
+1. **Ollama Server (Go)**: A lightweight HTTP server built with the Gin framework that exposes REST API endpoints (`/api/generate`, `/api/chat`, etc.). This layer handles request routing, model lifecycle management, and response formatting.
+
+2. **Inference Backend (llama.cpp)**: The actual LLM inference happens in llama.cpp, a high-performance C++ library optimized for running transformer models. Ollama communicates with llama.cpp through CGo bindings.
+
+**How it works in practice:**
+- You make an HTTP request to the Ollama server: `POST /api/generate`
+- The server checks if the requested model is loaded in memory
+- If not loaded, it loads the model into GPU/CPU memory
+- The request is forwarded to the llama.cpp backend server
+- Generated tokens stream back through the Go server to your client
+
+This architecture makes Ollama incredibly easy to use—just a single binary and a REST API. But it also introduces complexity in managing state across these layers, especially when dealing with GPU memory.
+
+### Model Loading and Unloading: How It Should Work
+
+When you request a model in Ollama, here's what happens:
+
+**Loading a model:**
+1. Ollama checks if the model is already in memory
+2. If not, it reads the model file from disk (usually `~/.ollama/models/`)
+3. Model layers are loaded into available GPU VRAM (or CPU RAM if no GPU)
+4. If the model exceeds a single GPU's capacity, Ollama automatically splits layers across multiple GPUs
+5. The model stays "warm" in memory based on the `keep_alive` setting
+
+**The `keep_alive` parameter:**
+- `keep_alive=0`: Unload immediately after generation completes
+- `keep_alive=5m`: Keep loaded for 5 minutes of inactivity
+- `keep_alive=-1`: Keep loaded indefinitely (our configuration)
+
+**Unloading a model (in theory):**
+- When `keep_alive` expires or you explicitly request unloading
+- Ollama should deallocate GPU memory
+- The model can be loaded again when needed
+
+**What actually happens (in practice):**
+
+This is where theory met reality in our production environment. As detailed in problem #6, Ollama's model unloading was **unreliable**:
+- Sometimes models unloaded immediately and freed VRAM
+- Other times, VRAM remained allocated for minutes after unload requests
+- Occasionally, memory was never freed until we restarted the entire Ollama service
+
+With `OLLAMA_MAX_LOADED_MODELS=2` and only 24GB VRAM per GPU, failed unloading meant we couldn't load the next model, causing pipeline failures. We had no visibility into *why* unloading failed—it would just silently not free memory.
+
+### GPU Memory Management
+
+Ollama attempts to automatically manage GPU memory, but this automation comes with trade-offs:
+
+**Memory allocation strategy:**
+- When loading a model, Ollama calculates required VRAM based on model size and context window
+- Larger context windows (`OLLAMA_NUM_CTX`) exponentially increase memory requirements
+- With multiple models loaded (`OLLAMA_MAX_LOADED_MODELS=2`), memory becomes a juggling act
+
+**The hidden costs of context windows:**
+```
+Model: Qwen3-14B (fits in ~14GB base VRAM)
+
+OLLAMA_NUM_CTX=2048   → ~14GB VRAM   (Ollama default)
+OLLAMA_NUM_CTX=35567  → ~18GB VRAM   (our initial setting)
+OLLAMA_NUM_CTX=64000  → ~22GB VRAM   (approaching GPU limit)
+OLLAMA_NUM_CTX=128000 → ~45GB VRAM   (requires multi-GPU split)
+```
+
+**Why this caused problems:**
+- Memory requirements weren't deterministic—the same configuration would sometimes OOM, sometimes work
+- Ollama doesn't expose real-time VRAM usage through its API
+- Memory fragmentation accumulated over time, requiring periodic restarts
+
+### Multi-GPU Layer Distribution (Pipeline Parallelism)
+
+When a model exceeds a single GPU's capacity, Ollama uses **pipeline parallelism** to split it across GPUs:
+
+**How layer splitting works:**
+```
+Example: Qwen3-32B model with 32 transformer layers on 2 GPUs
+
+GPU 0: Layers 0-15  (first half of the model)
+GPU 1: Layers 16-31 (second half of the model)
+```
+
+**The process flow:**
+1. Input tokens enter GPU 0
+2. GPU 0 processes layers 0-15, produces intermediate activations
+3. **Activations transfer from GPU 0 → GPU 1 over PCIe** (the bottleneck!)
+4. GPU 1 processes layers 16-31, produces final output
+5. Output transfers back to GPU 0 over PCIe
+
+**Why this matters:**
+
+The transfer speed between GPUs determines overall performance:
+- **NVLink (A100, H100 instances)**: ~600 GB/s bandwidth → efficient multi-GPU
+- **PCIe 4.0 (g5.12xlarge instances)**: ~32 GB/s bandwidth → **18x slower transfers!**
+
+This explained our shocking performance degradation:
+- Single-GPU models (fits in 24GB): 30-45 seconds per generation
+- Multi-GPU split models (>24GB): 120-180 seconds per generation (**3-4x slower**)
+
+The g5.12xlarge instance has 4 powerful GPUs, but they can't efficiently work together on a single model due to PCIe bottlenecks. This forced us to use smaller, lower-quality models that fit on a single GPU.
+
+### Visual Architecture Overview
+
+**Basic Client-Server Architecture:**
+
+![Ollama Basic Architecture](/assets/images/overall_arch_ollama.png)
+*Figure 1: Ollama's Client-Server architecture showing the three core components and their HTTP-based communication.*
+
+Ollama employs a classic **Client-Server (CS) architecture**, where:
+
+- **The Client** interacts with users via the command line
+- **The Server** can be started through multiple methods: command line, desktop application (based on the Electron framework), or Docker. Regardless of the method, they all invoke the same executable file.
+- **Client-Server communication** occurs via HTTP
+
+The Ollama Server consists of two core components:
+
+1. **ollama-http-server**: Responsible for interacting with the client, handling API requests, and managing model lifecycle
+2. **llama.cpp**: Serving as the LLM inference engine, it loads and runs large language models, handling inference requests and returning results
+
+Communication between ollama-http-server and llama.cpp also occurs via HTTP. It's worth noting that llama.cpp is an independent open-source project known for its **cross-platform and hardware-friendliness**—it can run without a GPU, even on devices like the Raspberry Pi.
+
+**Conversation Processing Flow:**
+
+![Ollama Conversation Flow](/assets/images/ollama_conversation_processing_flow.png)
+*Figure 2: Detailed conversation processing flow showing the preparation stage (model download/verification) and interactive stage (actual chat/generation).*
+
+The conversation process between a user and Ollama can be broken down into two main stages:
+
+**1. Preparation Stage:**
+- The user initiates a conversation by executing a CLI command like `ollama run llama3.2`
+- The CLI client sends an HTTP request (`POST /api/show`) to ollama-http-server to retrieve model information from local storage
+- If the model is not found locally (404 not found), the CLI sends a `POST /api/pull` request to download the model from the remote registry
+- Once downloaded, model information is retrieved again and confirmed
+
+**2. Interactive Conversation Stage:**
+- The CLI sends an empty message to the `/api/generate` endpoint for initial setup
+- The actual conversation begins with a `POST /api/chat` request to ollama-http-server
+- The ollama-http-server relies on the llama.cpp engine to perform inference:
+  - First, it sends a `GET /health` request to llama.cpp to confirm its health status
+  - Then it sends a `POST /completion` request to receive the generated response
+  - The response streams back through ollama-http-server to the CLI for display
+
+**Why this matters for our use case:**
+
+In our production pipeline, we weren't using the CLI—we were making programmatic API calls to `/api/generate` from Python code running autonomously on EC2 instances. This meant:
+- **No manual intervention** when models failed to load or hung during inference
+- **Limited visibility** into which stage failed (HTTP server vs. llama.cpp backend)
+- **Cascading failures** when model unloading didn't properly free GPU memory between requests
+
+**Key takeaway:** Ollama's architecture prioritizes developer experience (simple installation, automatic GPU management, clean API) over production operations (observability, deterministic behavior, efficient multi-GPU). This trade-off works beautifully for local development and prototyping, but created significant challenges in our autonomous, multi-model production pipeline.
 
 ## The Problems We Encountered
 
@@ -384,5 +546,6 @@ For teams with deep infrastructure expertise and high-volume, single-model workl
 **Read More**:
 - [Mutt Data - AI Strategy Partners](https://www.muttdata.ai/)
 - [Moving from Ollama to vLLM: Finding Stability for High-Throughput LLM Serving](https://pub.towardsai.net/moving-from-ollama-to-vllm-finding-stability-for-high-throughput-llm-serving-74d3dc9702c8)
+- [Analysis of Ollama Architecture and Conversation Processing Flow](https://medium.com/@rifewang/analysis-of-ollama-architecture-and-conversation-processing-flow-for-ai-llm-tool-ead4b9f40975)
 - [vLLM Documentation](https://docs.vllm.ai/)
 - [Ollama GitHub](https://github.com/ollama/ollama)
