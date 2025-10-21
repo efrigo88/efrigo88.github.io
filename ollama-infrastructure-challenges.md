@@ -17,7 +17,8 @@
   - [Model Loading and Unloading: How It Should Work](#model-loading-and-unloading-how-it-should-work)
   - [GPU Memory Management](#gpu-memory-management)
   - [Multi-GPU Layer Distribution (Pipeline Parallelism)](#multi-gpu-layer-distribution-pipeline-parallelism)
-  - [Visual Architecture Overview](#visual-architecture-overview)
+  - [Conversation Processing Flow](#conversation-processing-flow)
+  - [Why This Architecture Mattered for Our Production Use Case](#why-this-architecture-mattered-for-our-production-use-case)
 - [The Problems We Encountered](#the-problems-we-encountered)
   - [1. Constant Hangs and Timeouts](#1-constant-hangs-and-timeouts)
   - [2. Opaque Logging and Debugging](#2-opaque-logging-and-debugging)
@@ -75,9 +76,19 @@ Before diving into the problems we encountered, it's helpful to understand how O
 
 ### Server-Client Architecture
 
-Ollama follows a two-layer architecture:
+![Ollama Basic Architecture](/assets/images/overall_arch_ollama.png)
+*Figure 1: Ollama's Client-Server architecture showing the three core components and their HTTP-based communication.*
 
-1. **Ollama Server (Go)**: A lightweight HTTP server built with the Gin framework that exposes REST API endpoints (`/api/generate`, `/api/chat`, etc.). This layer handles request routing, model lifecycle management, and response formatting.
+Ollama employs a classic **Client-Server (CS) architecture** with two main layers:
+
+**The Client:**
+- Interacts with users via the command line
+- Can also be started through desktop application (Electron-based) or Docker
+- All methods invoke the same executable file
+
+**The Server (two core components):**
+
+1. **Ollama HTTP Server (Go)**: A lightweight HTTP server built with the Gin framework that exposes REST API endpoints (`/api/generate`, `/api/chat`, etc.). This layer handles request routing, model lifecycle management, and response formatting.
 
 2. **Inference Backend (llama.cpp)**: The actual LLM inference happens in llama.cpp, a high-performance C++ library optimized for running transformer models. Ollama communicates with llama.cpp through CGo bindings.
 
@@ -87,6 +98,8 @@ Ollama follows a two-layer architecture:
 - If not loaded, it loads the model into GPU/CPU memory
 - The request is forwarded to the llama.cpp backend server
 - Generated tokens stream back through the Go server to your client
+
+Communication between the client and server, as well as between ollama-http-server and llama.cpp, all occurs via HTTP. It's worth noting that llama.cpp is an independent open-source project known for its **cross-platform and hardware-friendliness**—it can run without a GPU, even on devices like the Raspberry Pi.
 
 This architecture makes Ollama incredibly easy to use—just a single binary and a REST API. But it also introduces complexity in managing state across these layers, especially when dealing with GPU memory.
 
@@ -152,27 +165,7 @@ The transfer speed between GPUs is critical for performance:
 
 This bandwidth difference creates a significant bottleneck when models are split across GPUs with PCIe interconnections, as we'll see in the problems section.
 
-### Visual Architecture Overview
-
-**Basic Client-Server Architecture:**
-
-![Ollama Basic Architecture](/assets/images/overall_arch_ollama.png)
-*Figure 1: Ollama's Client-Server architecture showing the three core components and their HTTP-based communication.*
-
-Ollama employs a classic **Client-Server (CS) architecture**, where:
-
-- **The Client** interacts with users via the command line
-- **The Server** can be started through multiple methods: command line, desktop application (based on the Electron framework), or Docker. Regardless of the method, they all invoke the same executable file.
-- **Client-Server communication** occurs via HTTP
-
-The Ollama Server consists of two core components:
-
-1. **ollama-http-server**: Responsible for interacting with the client, handling API requests, and managing model lifecycle
-2. **llama.cpp**: Serving as the LLM inference engine, it loads and runs large language models, handling inference requests and returning results
-
-Communication between ollama-http-server and llama.cpp also occurs via HTTP. It's worth noting that llama.cpp is an independent open-source project known for its **cross-platform and hardware-friendliness**—it can run without a GPU, even on devices like the Raspberry Pi.
-
-**Conversation Processing Flow:**
+### Conversation Processing Flow
 
 ![Ollama Conversation Flow](/assets/images/ollama_conversation_processing_flow.png)
 *Figure 2: Detailed conversation processing flow showing the preparation stage (model download/verification) and interactive stage (actual chat/generation).*
@@ -193,7 +186,7 @@ The conversation process between a user and Ollama can be broken down into two m
   - Then it sends a `POST /completion` request to receive the generated response
   - The response streams back through ollama-http-server to the CLI for display
 
-**Why this matters for our use case:**
+### Why This Architecture Mattered for Our Production Use Case
 
 In our production pipeline, we weren't using the CLI—we were making programmatic API calls to `/api/generate` from Python code running autonomously on EC2 instances. This meant:
 - **No manual intervention** when models failed to load or hung during inference
