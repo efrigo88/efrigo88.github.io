@@ -28,7 +28,7 @@
 
 ## Introduction
 
-At **Mutt Data**, we built an AI-powered system for our client **TramCase** to generate legal declarations for immigration cases (VAWA and Visa T). The pipeline processes complex case data through multiple stages: PDF extraction, semantic chunking with FAISS vector search, multi-model LLM generation, and quality evaluation using BERTScore metrics.
+At **Mutt Data**, we built an AI-powered system for one of our clients to generate legal declarations for immigration cases (VAWA and Visa T). The pipeline processes complex case data through multiple stages: PDF extraction, semantic chunking with FAISS vector search, multi-model LLM generation, and quality evaluation using BERTScore metrics.
 
 **The Challenge**: Each pipeline run made 10-15 LLM calls across 5-8 different models (base generation, fallback models, multiple judges, guardrails rewriting). We needed infrastructure that could:
 - Switch models dynamically mid-execution without restarting services
@@ -377,7 +377,7 @@ For teams with deep infrastructure expertise and high-volume, single-model workl
 
 ---
 
-**About the Project**: This system was developed by **Mutt Data** for **TramCase**, a company building AI-powered tools to assist immigration attorneys with case preparation. The RAG pipeline generates legal declarations for VAWA and Visa T cases, combining PDF extraction, semantic search, multi-model LLM generation, and quality evaluation.
+**About the Project**: This system was developed by **Mutt Data** for a client building AI-powered tools to assist immigration attorneys with case preparation. The RAG pipeline generates legal declarations for VAWA and Visa T cases, combining PDF extraction, semantic search, multi-model LLM generation, and quality evaluation.
 
 **About Mutt Data**: We are AI strategy partners specializing in building production-ready AI/ML systems for complex, real-world use cases. As an **AWS Advanced Consulting Partner** with Machine Learning competency, we help businesses in AdTech, MarTech, FinTech, and Telco build automated systems that maximize revenue. This project taught us invaluable lessons about the operational realities of self-hosted LLM infrastructure at scale. Learn more at [muttdata.ai](https://www.muttdata.ai/).
 
