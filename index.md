@@ -5,6 +5,8 @@ title: Home
 
 # Welcome
 
+<img src="/assets/images/me.png" alt="Emiliano Frigo" style="max-width: 300px; border-radius: 8px; margin: 20px 0;">
+
 Hi, I'm **Emiliano Frigo**, a Data Engineer specializing in Data Architecture in Operations at [Mutt Data](https://www.muttdata.ai/).
 
 My primary focus is on **data architecture**, designing scalable systems and pipelines. This blog is where I explore new territories—starting with my first venture into the world of AI/ML infrastructure when I got assigned to an AI project.
