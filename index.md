@@ -5,11 +5,15 @@ title: Home
 
 # Welcome
 
-<img src="/assets/images/me.png" alt="Emiliano Frigo" style="max-width: 300px; border-radius: 8px; margin: 20px 0;">
-
-Hi, I'm **Emiliano Frigo**, a Data Engineer specializing in Data Architecture in Operations at [Mutt Data](https://www.muttdata.ai/).
-
-My primary focus is on **data architecture**, designing scalable systems and pipelines. This blog is where I explore new territories—starting with my first venture into the world of AI/ML infrastructure when I got assigned to an AI project.
+<div style="display: flex; align-items: flex-start; gap: 2rem; margin: 2rem 0; flex-wrap: wrap;">
+  <div style="flex: 0 0 auto;">
+    <img src="/assets/images/me.png" alt="Emiliano Frigo" style="max-width: 300px; width: 100%; border-radius: 8px;">
+  </div>
+  <div style="flex: 1 1 300px;">
+    <p>Hi, I'm <strong>Emiliano Frigo</strong>, a Data Engineer specializing in Data Architecture in Operations at <a href="https://www.muttdata.ai/">Mutt Data</a>.</p>
+    <p>My primary focus is on <strong>data architecture</strong>, designing scalable systems and pipelines. This blog is where I explore new territories—starting with my first venture into the world of AI/ML infrastructure when I got assigned to an AI project.</p>
+  </div>
+</div>
 
 ---
 
