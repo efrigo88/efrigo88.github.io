@@ -10,7 +10,7 @@ This is my personal GitHub Pages site where I share technical posts about AI/ML 
 
 ## About
 
-I'm a Data Engineer specializing in Data Architecture in Operations at [Mutt Data](https://www.muttdata.ai/).
+I'm a Data Engineer specializing in Data Architecture in Operations, with hands-on experience in AI Engineering.
 
 ## Tech Stack
 
