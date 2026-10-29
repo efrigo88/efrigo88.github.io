@@ -10,8 +10,8 @@ title: Home
     <img src="/assets/images/me.png" alt="Emiliano Frigo" style="max-width: 300px; width: 100%; border-radius: 8px;">
   </div>
   <div style="flex: 1 1 300px;">
-    <p>Hi, I'm <strong>Emiliano Frigo</strong>, a Data Engineer specializing in Data Architecture in Operations.</p>
-    <p>My primary focus is on <strong>data architecture</strong>, designing scalable systems and pipelines. This blog is where I explore new territories—starting with my first venture into the world of AI/ML infrastructure when I got assigned to an AI project.</p>
+    <p>Hi, I'm <strong>Emiliano Frigo</strong>, a Data Engineer specializing in Data Architecture in Operations, with hands-on experience in AI Engineering.</p>
+    <p>My primary focus is on <strong>data architecture</strong>, designing scalable systems and pipelines, and more recently on <strong>AI engineering</strong>: building and operating LLM-based systems in production. This blog is where I explore new territories—starting with my first venture into the world of AI/ML infrastructure when I got assigned to an AI project.</p>
   </div>
 </div>
 
@@ -40,8 +40,9 @@ This was my first deep dive into AI/ML infrastructure after being assigned to an
 
 ## About Me
 
-- **Role**: Data Engineer - Data Architecture in Operations
+- **Role**: Data Engineer - Data Architecture in Operations & AI Engineering
 - **Primary Focus**: Data architecture, designing scalable data systems and pipelines
+- **AI Engineering**: LLM inference infrastructure, RAG pipelines, and production AI/ML systems
 - **Recent Exploration**: AI/ML infrastructure (this blog documents my first AI project assignment)
 - **GitHub**: [@efrigo88](https://github.com/efrigo88)
 
