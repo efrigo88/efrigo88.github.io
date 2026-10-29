@@ -4,7 +4,7 @@
 
 **Author**: Emiliano Frigo<br>
 **Role**: Data Engineer - Data Architecture in Operations<br>
-**Company**: [Mutt Data](https://www.muttdata.ai/)
+**Company at the time of writing**: [Mutt Data](https://www.muttdata.ai/)
 
 ---
 
@@ -35,7 +35,7 @@
 
 ## Introduction
 
-At **Mutt Data**, we built an AI-powered system for one of our clients to generate legal declarations for immigration cases (VAWA and Visa T). The pipeline processes complex case data through multiple stages: PDF extraction, semantic chunking with FAISS vector search, multi-model LLM generation, and quality evaluation using BERTScore metrics.
+While I was working at **Mutt Data**, we built an AI-powered system for one of our clients to generate legal declarations for immigration cases (VAWA and Visa T). The pipeline processes complex case data through multiple stages: PDF extraction, semantic chunking with FAISS vector search, multi-model LLM generation, and quality evaluation using BERTScore metrics.
 
 **The Challenge**: Each pipeline run made 10-15 LLM calls across 5-8 different models (base generation, fallback models, multiple judges, guardrails rewriting). We needed infrastructure that could:
 - Switch models dynamically mid-execution without restarting services
@@ -534,11 +534,11 @@ For teams with deep infrastructure expertise and high-volume, single-model workl
 
 ---
 
-**About the Project**: This system was developed by **Mutt Data** for a client building AI-powered tools to assist immigration attorneys with case preparation. The RAG pipeline generates legal declarations for VAWA and Visa T cases, combining PDF extraction, semantic search, multi-model LLM generation, and quality evaluation.
+**About the Project**: This system was developed by **Mutt Data**, where I was working at the time, for a client building AI-powered tools to assist immigration attorneys with case preparation. The RAG pipeline generates legal declarations for VAWA and Visa T cases, combining PDF extraction, semantic search, multi-model LLM generation, and quality evaluation.
 
 This was a collaborative team effort involving 2 data architects and 3 ML engineers. As part of this team, I was specifically tasked with designing and managing the LLM inference infrastructure. The challenges documented in this article represent real production issues we encountered, debugged, and ultimately resolved. I'm sharing these lessons with the community in hopes that others can avoid similar pitfalls when building production LLM systems.
 
-**About Mutt Data**: We are AI strategy partners specializing in building production-ready AI/ML systems for complex, real-world use cases. As an **AWS Advanced Consulting Partner** with Machine Learning competency, we help businesses in AdTech, MarTech, FinTech, and Telco build automated systems that maximize revenue. This project taught us invaluable lessons about the operational realities of self-hosted LLM infrastructure at scale. Learn more at [muttdata.ai](https://www.muttdata.ai/).
+**About Mutt Data**: Mutt Data is an AI strategy partner specializing in building production-ready AI/ML systems for complex, real-world use cases, and an **AWS Advanced Consulting Partner** with Machine Learning competency serving AdTech, MarTech, FinTech, and Telco. This project taught us invaluable lessons about the operational realities of self-hosted LLM infrastructure at scale. Learn more at [muttdata.ai](https://www.muttdata.ai/).
 
 **Read More**:
 
